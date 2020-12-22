@@ -1,0 +1,9 @@
+regex
+requests
+tqdm
+numpy
+torch
+toposort
+boto3
+wandb
+git+https://github.com/huggingface/transformers
