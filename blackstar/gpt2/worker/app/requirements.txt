@@ -1,9 +1,11 @@
 regex
 requests
 tqdm
+pika
 numpy
 torch
+gingerit
 toposort
-boto3
+tensorflow
 wandb
 git+https://github.com/huggingface/transformers

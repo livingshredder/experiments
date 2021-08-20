@@ -1,21 +1,11 @@
-FROM tensorflow/tensorflow:latest-gpu
+FROM nvidia/cuda
 
-# nvidia-docker 1.0
-LABEL com.nvidia.volumes.needed="nvidia_driver"
-LABEL com.nvidia.cuda.version="${CUDA_VERSION}"
-
-# nvidia-container-runtime
-ENV NVIDIA_VISIBLE_DEVICES=all \
-    NVIDIA_DRIVER_CAPABILITIES=compute,utility \
-    NVIDIA_REQUIRE_CUDA="cuda>=8.0" \
-    LANG=C.UTF-8
-
-RUN apt-get -y install git
+RUN apt-get update && apt-get -y install git python3 python3-pip
 
 RUN mkdir /app
 WORKDIR /app
 COPY app/requirements.txt /app/
-RUN pip3 install -r requirements.txt
+RUN pip install -r requirements.txt
 
 COPY app/* /app/
 ENTRYPOINT python3 ./run_worker.py
