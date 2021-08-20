@@ -13,11 +13,12 @@ finnish = [
 finnishpasses = 1 # Finnish passes
 frenchpasses = 1  # French passes
 germanpasses = 1  # German passes
-chinesepasses = 0 # Chinese passes
+chinesepasses = 1 # Chinese passes
 dutchpasses = 1   # Dutch passes
 swedishpasses = 1 # Swedish passes
 
-weirdness = 0.15   # 0 to 1
+weirdness = 0.0   # 0 to 1
+loops = 10
 
 umlautability = weirdness * 0.3
 corruptability = weirdness * 0.02
@@ -137,30 +138,32 @@ with open(tfile, 'r') as cfile:
 translator = Translator()
 
 print("Initializing Transmangler")
-print("Finnishification...")
-text = translator.translate(text, "fi", "en").text
-print("Running Text Mangler")
-text = mangleText(text)
-print("Running Translation Mangler")
-text = transMangle(text)
-print("Translating back to English")
-text = translator.translate(text, "en", "fi").text
-print("Running Grammar Fixer")
-text = fixGrammar(text)
-print("Translating to desired language")
-if mode == "finnish":
+
+for i in range(loops):
+    print("Finnishification...")
     text = translator.translate(text, "fi", "en").text
-elif mode == "german":
-    text = translator.translate(text, "de", "en").text
-elif mode == "latin":
-    text = translator.translate(text, "la", "en").text
-elif mode == "french":
-    text = translator.translate(text, "fr", "en").text
-elif mode == "chinese":
-    text = translator.translate(text, "zh-TW", "en").text
-elif mode == "dutch":
-    text = translator.translate(text, "nl", "en").text
-elif mode == "swedish":
-    text = translator.translate(text, "sv", "en").text
+    print("Running Text Mangler")
+    text = mangleText(text)
+    print("Running Translation Mangler")
+    text = transMangle(text)
+    print("Translating back to English")
+    text = translator.translate(text, "en", "fi").text
+    print("Running Grammar Fixer")
+    text = fixGrammar(text)
+    print("Translating to desired language")
+    if mode == "finnish":
+        text = translator.translate(text, "fi", "en").text
+    elif mode == "german":
+        text = translator.translate(text, "de", "en").text
+    elif mode == "latin":
+        text = translator.translate(text, "la", "en").text
+    elif mode == "french":
+        text = translator.translate(text, "fr", "en").text
+    elif mode == "chinese":
+        text = translator.translate(text, "zh-TW", "en").text
+    elif mode == "dutch":
+        text = translator.translate(text, "nl", "en").text
+    elif mode == "swedish":
+        text = translator.translate(text, "sv", "en").text
 
 print(text)
