@@ -13,6 +13,16 @@ type Session struct {
 	cctx *C.struct_NFast_Call_Context
 }
 
+// Allocates n bytes using NFastApp_Malloc
+// func (s *Session) malloc(bytes uintptr) unsafe.Pointer {
+// 	return C.NFastApp_Malloc(s.app, C.ulong(bytes), s.cctx, nil)
+// }
+
+// // Allocates an array of length n with size n using NFastApp_Malloc
+// func (s *Session) mallocArray(len int, size uintptr) unsafe.Pointer {
+// 	return s.malloc(uintptr(len) * size)
+// }
+
 // Retrieves the current security world information.
 // Warning: this is usually a very slow call
 func (s *Session) GetWorld() (*World, error) {
