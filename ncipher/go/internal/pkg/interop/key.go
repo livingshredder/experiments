@@ -12,7 +12,7 @@ import (
 type KeyInfo struct {
 	Type   C.M_KeyType
 	Length int
-	Hash   KeyHash
+	Hash   C.M_KeyHash
 }
 
 // Attributes on a key that are set at generation time
@@ -25,14 +25,18 @@ type KeyProperties struct {
 	appdata *C.M_AppData
 }
 
-type KeyHash [20]byte
-
 // Represents a key in the security world loaded onto a module
 type Key struct {
 	ssn *Session
 
+	// have we already fetched the info?
+	infoExists bool
+
+	// Warning: There is no guarantee the members of
+	// this struct are populated. Use FetchInfo() to fetch it.
+	Info KeyInfo
+
 	// Cached
-	info  *KeyInfo
 	props KeyProperties
 
 	// Handle to this key in the security world
@@ -40,13 +44,11 @@ type Key struct {
 	Cert *C.M_ModuleCert
 }
 
-// Retrieves the key info.
-func (k *Key) GetInfo() (*KeyInfo, error) {
-	if k.info != nil {
-		return k.info, nil
+// Retrieves the key info, populating Type, Length, and Hash.
+func (k *Key) FetchInfo() error {
+	if k.infoExists {
+		return nil
 	}
-
-	info := KeyInfo{}
 
 	cmd := C.M_Command{}
 	cmd.cmd = C.Cmd_GetKeyInfoEx
@@ -56,44 +58,16 @@ func (k *Key) GetInfo() (*KeyInfo, error) {
 
 	reply, status := k.ssn.Transact(cmd)
 	if status != C.Status_OK {
-		return nil, fmt.Errorf("Cmd_GetKeyInfoEx failed: %d", status)
+		return prettyError("Cmd_GetKeyInfoEx", status)
 	}
 
 	rreply := (*C.M_Cmd_GetKeyInfoEx_Reply)(unsafe.Pointer(&reply.reply))
-	info.Type = rreply._type
-	info.Length = int(rreply.length)
-	info.Hash = KeyHash(rreply.hash)
-	return &info, nil
-}
+	k.Info.Type = rreply._type
+	k.Info.Length = int(rreply.length)
+	k.Info.Hash = rreply.hash
 
-// Returns the type of the key
-func (k *Key) GetType() (*C.M_KeyType, error) {
-	info, err := k.GetInfo()
-	if err != nil {
-		return nil, err
-	}
-
-	return &info.Type, nil
-}
-
-// Returns the length of the key in bits
-func (k *Key) GetLength() (*int, error) {
-	info, err := k.GetInfo()
-	if err != nil {
-		return nil, err
-	}
-
-	return &info.Length, nil
-}
-
-// Returns the hash of the key
-func (k *Key) GetHash() (*KeyHash, error) {
-	info, err := k.GetInfo()
-	if err != nil {
-		return nil, err
-	}
-
-	return &info.Hash, nil
+	k.infoExists = true
+	return nil
 }
 
 // Retrieves the ACL. If it isn't present, it's looked up using the KeyID.
@@ -112,7 +86,7 @@ func (k *Key) GetACL() (*ACL, error) {
 
 	reply, status := k.ssn.Transact(cmd)
 	if status != C.Status_OK {
-		return nil, fmt.Errorf("Cmd_GetACL failed: %d", status)
+		return nil, prettyError("Cmd_GetACL", status)
 	}
 
 	rreply := (*C.M_Cmd_GetACL_Reply)(unsafe.Pointer(&reply.reply))
@@ -133,11 +107,54 @@ func (k *Key) SetACL(acl ACL) error {
 
 	_, status := k.ssn.Transact(cmd)
 	if status != C.Status_OK {
-		return fmt.Errorf("Cmd_SetACL failed: %d", status)
+		return prettyError("Cmd_SetACL", status)
 	}
 
 	k.props.acl = &acl
 	return nil
+}
+
+func (k *Key) GetAppData() (*C.M_AppData, error) {
+	if k.props.appdata != nil {
+		return k.props.appdata, nil
+	}
+
+	cmd := C.M_Command{}
+	cmd.cmd = C.Cmd_GetAppData
+
+	args := (*C.M_Cmd_GetAppData_Args)(unsafe.Pointer(&cmd.args))
+	args.key = k.Id
+
+	reply, status := k.ssn.Transact(cmd)
+	if status != C.Status_OK {
+		return nil, prettyError("Cmd_GetAppData", status)
+	}
+
+	rreply := (*C.M_Cmd_GetAppData_Reply)(unsafe.Pointer(&reply.reply))
+	k.props.appdata = &rreply.appdata
+
+	return k.props.appdata, nil
+}
+
+func (k *Key) SetAppData(data C.M_AppData) error {
+	cmd := C.M_Command{}
+	cmd.cmd = C.Cmd_SetAppData
+
+	args := (*C.M_Cmd_SetAppData_Args)(unsafe.Pointer(&cmd.args))
+	args.key = k.Id
+	args.appdata = data
+
+	_, status := k.ssn.Transact(cmd)
+	if status != C.Status_OK {
+		return prettyError("Cmd_SetAppData", status)
+	}
+
+	k.props.appdata = &data
+	return nil
+}
+
+func (k *Key) Destroy() error {
+	return k.ssn.Destroy(k.Id)
 }
 
 func (k *Key) String() string {
@@ -146,15 +163,15 @@ func (k *Key) String() string {
 
 //go:generate stringer -type=_Ctype_M_KeyType
 func (k *Key) PrettyPrint() {
-	info, err := k.GetInfo()
+	err := k.FetchInfo()
 	if err != nil {
 		log.Fatalf("Failed to get key info: %s", err)
 	}
 
 	fmt.Printf("KeyID: %#x\n", k.Id)
-	fmt.Printf("  Hash: %x\n", info.Hash)
-	fmt.Printf("  Length: %d\n", info.Length)
-	fmt.Printf("  Type: %s\n", enumValToStr(uint(info.Type), unsafe.Pointer(&C.NF_KeyType_enumtable)))
+	fmt.Printf("  Hash: %x\n", k.Info.Hash)
+	fmt.Printf("  Length: %d\n", k.Info.Length)
+	fmt.Printf("  Type: %s\n", enumValToStr(uint(k.Info.Type), unsafe.Pointer(&C.NF_KeyType_enumtable)))
 }
 
 func NewKey(world *World, id C.M_KeyID) (*Key, error) {
@@ -189,11 +206,15 @@ func generateKey(world *World, kargs GenerateKeyArgs, params C.M_KeyGenParams) (
 	args.module = kargs.gen.module
 	args.params = params
 	args.acl = kargs.key.acl.Data
-	args.appdata = kargs.key.appdata
+
+	if kargs.key.appdata != nil {
+		value := C.M_AppData(*kargs.key.appdata)
+		args.appdata = &value
+	}
 
 	reply, status := key.ssn.Transact(cmd)
 	if status != C.Status_OK {
-		return nil, fmt.Errorf("NFastApp_Transact failed: %d", status)
+		return nil, prettyError("Cmd_GenerateKey", status)
 	}
 
 	rreply := (*C.M_Cmd_GenerateKey_Reply)(unsafe.Pointer(&reply.reply))
@@ -220,7 +241,7 @@ func generateKeyPair(world *World, kargs GenerateKeyPairArgs, params C.M_KeyGenP
 
 	reply, status := world.ssn.Transact(cmd)
 	if status != C.Status_OK {
-		return nil, nil, fmt.Errorf("NFastApp_Transact failed: %d", status)
+		return nil, nil, prettyError("Cmd_GenerateKeyPair", status)
 	}
 
 	rreply := (*C.M_Cmd_GenerateKeyPair_Reply)(unsafe.Pointer(&reply.reply))
@@ -237,12 +258,13 @@ type GenerateKeyOptions struct {
 	key KeyProperties
 }
 
-func GenerateAESKey(world *World, length int, kargs GenerateKeyArgs) (*Key, error) {
+// Generates an AES key of bits length.
+func GenerateAESKey(world *World, bits int, kargs GenerateKeyArgs) (*Key, error) {
 	params := C.M_KeyGenParams{}
 	params._type = C.KeyType_Rijndael
 
 	gparams := (*C.M_KeyType_Random_GenParams)(unsafe.Pointer(&params.params))
-	gparams.lenbytes = C.uint(length / 8)
+	gparams.lenbytes = C.uint(bits / 8)
 
 	return generateKey(world, kargs, params)
 }

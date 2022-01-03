@@ -9,15 +9,17 @@ import (
 func main() {
 	session, err := interop.NewSession()
 	if err != nil {
-		log.Fatalf("NewSession failed: %s", err)
+		log.Fatalf("%s", err)
 	}
 	defer session.Close()
 
 	world, err := session.GetWorld()
 	if err != nil {
-		log.Fatalf("GetWorld failed: %s", err)
+		log.Fatalf("%s", err)
 	}
 	defer world.Close()
+
+	//fmt.Println(world)
 
 	//fmt.Println(world)
 	world.KeygenTest()

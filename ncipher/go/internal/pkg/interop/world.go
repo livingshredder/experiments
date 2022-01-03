@@ -5,12 +5,16 @@ import "C"
 import (
 	"fmt"
 	"log"
+	"unsafe"
 )
 
 // Represents a nCipher Security World
 type World struct {
 	ssn  *Session
 	Data *C.NFKM_WorldInfo
+
+	// data extracted from Data section
+	Modules []Module
 }
 
 func (w *World) Close() {
@@ -24,7 +28,7 @@ func (w *World) KeygenTest() {
 
 	acl, err := NewACL(w, params)
 	if err != nil {
-		log.Fatalf("NewACL failed: %s", err)
+		log.Fatalf("%s", err)
 	}
 	defer acl.Close()
 
@@ -37,8 +41,29 @@ func (w *World) KeygenTest() {
 	})
 
 	if err != nil {
-		log.Fatalf("NewKey failed: %s", err)
+		log.Fatalf("%s", err)
 	}
 
 	key.PrettyPrint()
+}
+
+func NewWorld(ssn *Session, data *C.NFKM_WorldInfo) World {
+	world := World{ssn: ssn, Data: data}
+
+	// Build the modules attribute
+	if world.Data.modules != nil {
+		len := world.Data.n_modules
+		result := []Module{}
+		data := (*[1 << 28]C.NFKM_opt_ModuleInfo)(unsafe.Pointer(world.Data.modules))[:len:len]
+
+		for i := range data {
+			if data[i] != nil {
+				result = append(result, NewModule(ssn, *data[i]))
+			}
+		}
+
+		world.Modules = result
+	}
+
+	return world
 }

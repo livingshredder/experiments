@@ -3,6 +3,7 @@ package interop
 //#include <nfkm.h>
 import "C"
 import (
+	"fmt"
 	"unsafe"
 )
 
@@ -30,4 +31,11 @@ func enumValFromStr(sym string, vit unsafe.Pointer) *uint {
 
 	rsv := uint(result)
 	return &rsv
+}
+
+// Generates a pretty error based on an action and return code
+func prettyError(act string, rc C.M_Status) error {
+	buf := (*C.char)(unsafe.Pointer(&[256]C.char{}))
+	C.NFast_StrError(buf, 256, rc, nil)
+	return fmt.Errorf("%s failed: %s", act, C.GoString(buf))
 }
