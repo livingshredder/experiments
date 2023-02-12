@@ -1,0 +1,7 @@
+--find-links https://download.pytorch.org/whl/cu116/torch
+
+datasets>=1.8.0
+transformers
+sklearn
+sentencepiece!=0.1.92
+torch
